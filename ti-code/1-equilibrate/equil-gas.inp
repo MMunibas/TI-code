@@ -1,0 +1,60 @@
+* MDCM PhCl NpT simulation for liquid density
+*
+
+bomlev 0
+prnlev 2 node 0
+
+!-- read parameters and coordinates
+read rtf   card name ../ref/phbr.top
+read param card name ../ref/phbr.par
+
+SET temp 298.0
+
+OPEN UNIT 10 READ CARD NAME ../ref/step5_slu.pdb
+READ SEQUENCE PDB UNIT 10
+GENERATE SOLU
+REWIND UNIT 10
+READ COOR PDB UNIT 10
+CLOSE UNIT 10
+
+SHAKE BONH PARA SELE ALL END
+
+OPEN UNIT 10 CARD READ NAME ../ref/12charges.dcm
+DCM IUDCM 10 TSHIFT
+CLOSE UNIT 10
+
+scalar mass stat
+calc pmass = int ( ?stot  /  50.0 )
+calc tmass = @pmass * 10
+
+mini sd 200 print 100
+
+calc tmin = @temp - 200.0
+
+OPEN WRITE FORM UNIT 50 FILE NAME equil-gas.dcd
+OPEN UNIT 51 CARD WRITE NAME equil-gas.res
+
+dyna leap verlet start -                    ! use leap-frog verlet integrator
+   timestep 0.001 nstep 40000 nprint 1000 - ! run 10K steps @ 1 fs time-steps
+   firstt @tmin finalt @temp tbath @temp -  ! heat from @tmin K to @temp K (200 K)
+   ihtfrq 1000 teminc 5 ieqfrq 0 -          ! heat the system 5K every 2500 steps
+   iasors 1 iasvel 1 iscvel 0 ichecw 0 -    ! assign velocities via a Gaussian
+   ntrfrq 500 -                             ! stop rotation and translation
+   iseed  11033 -                           ! pick a random seed for the
+   echeck 100.0                             ! If energy changes more than 100
+
+dyna leap cpt nstep 40000 timestep 0.001 -
+  nprint 100 nsavc 100 iuncrd 50 ntrfrq 200 -
+  iprfrq 50000 inbfrq -1 imgfrq 50 ihtfrq 0 -
+  ieqfrq 0 iunwri 51 -
+  hoover reft @temp tmass @tmass firstt @temp
+
+close unit 50
+close unit 51
+
+open unit 1 write form name equil-gas.pdb
+write coor pdb unit 1
+close unit 1
+
+STOP
+
